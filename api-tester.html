@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Auth Tester</title>
+  <style>
+    :root { --bg:#0f172a; --fg:#e2e8f0; --muted:#94a3b8; --accent:#22d3ee; --card:#111827; --btn:#1f2937; }
+    * { box-sizing: border-box }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; background:#0b1220; color:var(--fg); }
+    .wrap { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+    h1 { margin: 0 0 16px; font-size: 20px; font-weight: 700; }
+    .grid { display:grid; grid-template-columns: repeat(12,1fr); gap:16px; }
+    .card { grid-column: span 12; background: var(--card); border:1px solid #1f2937; border-radius: 12px; padding:16px; }
+    label { display:block; font-size:12px; color: var(--muted); margin-bottom:6px; }
+    input { width:100%; background:#0b1020; color:var(--fg); border:1px solid #293249; padding:10px 12px; border-radius:8px; outline: none; }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #22d3ee22; }
+    .row { display:grid; grid-template-columns: repeat(12,1fr); gap:12px; }
+    .col-6 { grid-column: span 6; }
+    .col-12 { grid-column: span 12; }
+    .actions { display:flex; flex-wrap: wrap; gap:8px; margin-top:12px; }
+    button { background: var(--btn); color: var(--fg); border:1px solid #2b3347; padding:10px 14px; border-radius: 8px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    .log { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; background:#0a0f1c; color:#cbd5e1; border:1px solid #1e293b; border-radius:10px; padding:12px; min-height:200px; white-space: pre-wrap; }
+    .token { word-break: break-all; font-size: 12px; color:#a5b4fc; }
+    .hint { color: var(--muted); font-size:12px; }
+  </style>
+  <script>
+    let accessToken = '';
+    let base = 'http://localhost:8000';
+
+    function setBaseUrl() {
+      base = document.getElementById('base').value.trim();
+      if (base.endsWith('/')) base = base.slice(0,-1);
+      alert('Đã set Base URL: ' + base);
+      log('Base URL set to: ' + (base || '(same origin)'));
+    }
+
+    function endpoint(path) { return (base ? base : '') + path; }
+
+    function log(msg, data) {
+      const el = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      el.textContent = `[${time}] ${msg}` + (data ? `\n${JSON.stringify(data, null, 2)}` : '') + "\n\n" + el.textContent;
+    }
+
+    async function request(method, url, body, useAuth = false) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (useAuth && accessToken) headers['Authorization'] = 'Bearer ' + accessToken;
+      const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      const text = await res.text();
+      let json; try { json = text ? JSON.parse(text) : null; } catch { json = { raw: text }; }
+      return { ok: res.ok, status: res.status, data: json };
+    }
+
+    async function onRegister() {
+      const payload = {
+        name: document.getElementById('name').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value || undefined,
+        address: document.getElementById('address').value || undefined,
+        password: document.getElementById('password').value,
+        password_confirmation: document.getElementById('password_confirmation').value,
+      };
+      const r = await request('POST', endpoint('/api/register'), payload);
+      alert(r.data.message);
+      log('REGISTER ' + r.status, r.data);
+    }
+
+    async function onLogin() {
+      const payload = {
+        email: document.getElementById('login_email').value,
+        password: document.getElementById('login_password').value,
+      };
+      const r = await request('POST', endpoint('/api/login'), payload);
+      log('LOGIN ' + r.status, r.data);
+      if (r.ok && r.data && r.data.data && r.data.data.access_token) {
+        alert('Đăng nhập thành công');
+        accessToken = r.data.data.access_token;
+        document.getElementById('token').textContent = accessToken;
+      }
+    }
+
+    async function onMe() {
+      const r = await request('GET', endpoint('/api/me'), null, true);
+      log('ME ' + r.status, r.data);
+      alert(r.data.message);
+    }
+
+    async function onRefresh() {
+      const r = await request('POST', endpoint('/api/refresh'), {}, true);
+      log('REFRESH ' + r.status, r.data);
+      alert(r.message);
+      if (r.ok && r.data && r.data.data && r.data.data.access_token) {
+        accessToken = r.data.data.access_token;
+        document.getElementById('token').textContent = accessToken;
+      }
+    }
+
+    async function onLogout() {
+      const r = await request('POST', endpoint('/api/logout'), {}, true);
+      log('LOGOUT ' + r.status, r.data);
+      alert(r.message);
+      accessToken = '';
+      document.getElementById('token').textContent = '(none)';
+    }
+
+    async function onResend() {
+      const payload = { email: document.getElementById('email').value };
+      const r = await request('POST', endpoint('/api/email/resend'), payload);
+      log('RESEND ' + r.status, r.data);
+      alert(r.message);
+    }
+
+    async function onVerifyUrl() {
+      const url = document.getElementById('verifyUrl').value.trim();
+      if (!url) return log('VERIFY: thiếu URL');
+      const r = await fetch(url);
+      const text = await r.text();
+      let data; try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+      log('VERIFY ' + r.status, data);
+      alert(r.message);
+    }
+  </script>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Auth API Tester</h1>
+      <div class="card">
+        <div class="row">
+          <div class="col-12">
+            <label>Base URL (để trống nếu cùng domain)</label>
+            <div style="display:flex; gap:8px;">
+              <input id="base" placeholder="http://localhost:8000" value="http://localhost:8000" />
+              <button onclick="setBaseUrl()">Set</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 style="margin:0 0 12px; font-size:16px;">Đăng ký</h2>
+        <div class="row">
+          <div class="col-6">
+            <label>Họ tên</label>
+            <input id="name" placeholder="Nguyễn Văn A" />
+          </div>
+          <div class="col-6">
+            <label>Số điện thoại</label>
+            <input id="phone" placeholder="0900000000" />
+          </div>
+          <div class="col-6">
+            <label>Email</label>
+            <input id="email" placeholder="a@example.com" />
+          </div>
+          <div class="col-6">
+            <label>Mật khẩu</label>
+            <input id="password" type="password" placeholder="secret123" />
+          </div>
+          <div class="col-6">
+            <label>Nhập lại mật khẩu</label>
+            <input id="password_confirmation" type="password" placeholder="secret123" />
+          </div>
+          <div class="col-12">
+            <label>Địa chỉ</label>
+            <input id="address" placeholder="123 Đường ABC" />
+          </div>
+        </div>
+        <div class="actions">
+          <button onclick="onRegister()">Đăng ký</button>
+          <button onclick="onResend()">Gửi lại email xác thực</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 style="margin:0 0 12px; font-size:16px;">Đăng nhập</h2>
+        <div class="row">
+          <div class="col-6">
+            <label>Email</label>
+            <input id="login_email" placeholder="a@example.com" />
+          </div>
+          <div class="col-6">
+            <label>Mật khẩu</label>
+            <input id="login_password" type="password" placeholder="secret123" />
+          </div>
+        </div>
+        <div class="actions">
+          <button onclick="onLogin()">Đăng nhập</button>
+          <button onclick="onMe()">Me</button>
+          <button onclick="onRefresh()">Refresh</button>
+          <button onclick="onLogout()">Đăng xuất</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <label>Access Token hiện tại</label>
+        <div class="token" id="token">(none)</div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <label>Verify URL (dán link xác thực từ email)</label>
+        <div style="display:flex; gap:8px;">
+          <input id="verifyUrl" placeholder="http://localhost/api/email/verify/{id}/{hash}?expires=...&signature=..." />
+          <button onclick="onVerifyUrl()">Xác thực</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">Không cần token, chỉ cần đúng link (signed).</div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <label>Logs</label>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+  </body>
+</html>
+
+
