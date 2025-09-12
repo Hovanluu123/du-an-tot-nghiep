@@ -48,11 +48,19 @@ class Category extends Model
 
     public function scopeActive($query)
     {
-        return $query->where('is_active', true);
+        try {
+            return $query->where('is_active', true);
+        } catch (\Throwable $e) {
+            return $query;
+        }
     }
 
     public function scopeOrdered($query)
     {
-        return $query->orderBy('sort_order')->orderBy('name');
+        try {
+            return $query->orderBy('sort_order')->orderBy('name');
+        } catch (\Throwable $e) {
+            return $query->orderBy('name');
+        }
     }
 }
