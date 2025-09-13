@@ -7,12 +7,52 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category')->latest()->paginate(10);
+        // Fake data sản phẩm dựa trên Model Product
+        $products = [
+            (object) [
+                'id' => 1,
+                'name' => 'Giày chạy bộ Nike',
+                'slug' => 'giay-chay-bo-nike',
+                'description' => 'Giày chạy bộ chuyên nghiệp',
+                'price' => 1200000.00,
+                'sale_price' => 1000000.00,
+                'stock_quantity' => 10,
+                'sku' => 'PRD-ABC12345',
+                'images' => ['giay-chay-bo.jpg'],
+                'specifications' => ['Size: 40', 'Color: Black'],
+                'is_active' => true,
+                'is_featured' => true,
+                'category_id' => 1,
+                'mainImage' => 'giay-chay-bo.jpg',
+                'formattedPrice' => '1.200.000 VNĐ',
+                'formattedSalePrice' => '1.000.000 VNĐ',
+            ],
+            (object) [
+                'id' => 2,
+                'name' => 'Áo thể thao Adidas',
+                'slug' => 'ao-the-thao-adidas',
+                'description' => 'Áo thể thao thoáng mát',
+                'price' => 500000.00,
+                'sale_price' => null,
+                'stock_quantity' => 15,
+                'sku' => 'PRD-XYZ98765',
+                'images' => ['ao-the-thao.jpg'],
+                'specifications' => ['Size: M', 'Color: Blue'],
+                'is_active' => true,
+                'is_featured' => false,
+                'category_id' => 2,
+                'mainImage' => 'ao-the-thao.jpg',
+                'formattedPrice' => '500.000 VNĐ',
+                'formattedSalePrice' => null,
+            ],
+        ];
+        // $products = Product::with('category')->latest()->paginate(10); // Uncomment khi có DB
         return view('admin.products.index', compact('products'));
     }
 
@@ -62,6 +102,7 @@ class ProductController extends Controller
                 $imagePaths[] = $imagePath;
             }
             $data['images'] = $imagePaths;
+            $data['mainImage'] = $imagePaths[0] ?? null; // Lấy ảnh đầu tiên làm mainImage
         }
 
         Product::create($data);
@@ -131,7 +172,9 @@ class ProductController extends Controller
         if ($request->hasFile('images')) {
             if ($product->images) {
                 foreach ($product->images as $image) {
-                    \Storage::disk('public')->delete($image);
+                    if (\Storage::disk('public')->exists($image)) {
+                        \Storage::disk('public')->delete($image);
+                    }
                 }
             }
             $imagePaths = [];
@@ -140,6 +183,7 @@ class ProductController extends Controller
                 $imagePaths[] = $imagePath;
             }
             $data['images'] = $imagePaths;
+            $data['mainImage'] = $imagePaths[0] ?? $product->mainImage; // Giữ mainImage cũ nếu không có ảnh mới
         }
 
         $product->update($data);
@@ -155,7 +199,9 @@ class ProductController extends Controller
     {
         if ($product->images) {
             foreach ($product->images as $image) {
-                \Storage::disk('public')->delete($image);
+                if (\Storage::disk('public')->exists($image)) {
+                    \Storage::disk('public')->delete($image);
+                }
             }
         }
 
